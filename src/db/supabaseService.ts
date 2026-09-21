@@ -21,6 +21,8 @@ import type {
   Expense,
 } from '../types';
 
+const ADMIN_USER_ROLES = ['ADMINISTRATEUR', 'RESPONSABLE', 'AGENT', 'CONTROLEUR'] as const;
+
 function sanitizeUuidOrNull(val?: string | null): string | null {
   if (!val) return null;
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -66,6 +68,85 @@ export interface NotificationItem {
   createdAt?: string;
 }
 
+function normalizeAdminUserRow(row: any): User {
+  return {
+    id: row.id,
+    username: row.username,
+    fullName: row.full_name,
+    role: row.role,
+    sectorId: row.sector_id,
+    sectorName: row.sector?.name || row.sectors?.name,
+    phone: row.phone,
+    isActive: row.is_active,
+    failedAttempts: row.failed_attempts || 0,
+    lockedUntil: row.locked_until,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function describeFunctionError(error: unknown, fallback: string): string {
+  const status = error && typeof error === 'object' && 'context' in error
+    ? Number((error as any).context?.status)
+    : 0;
+  const message = typeof error === 'string'
+    ? error
+    : error && typeof error === 'object' && 'message' in error && typeof (error as any).message === 'string'
+      ? (error as any).message
+      : error && typeof error === 'object' && 'error' in error && typeof (error as any).error === 'string'
+        ? (error as any).error
+        : fallback;
+
+  const normalized = String(message).toLowerCase();
+
+  if (status === 401 || normalized.includes('session') || normalized.includes('jwt') || normalized.includes('token') || normalized.includes('unauthorized')) {
+    return 'Session administrateur expirée ou non autorisée. Veuillez vous reconnecter.';
+  }
+  if (status === 403 || normalized.includes('forbidden')) {
+    return 'Accès refusé : cette action est réservée à un administrateur PORTUS.';
+  }
+  if (normalized.includes('duplicate') || normalized.includes('already') || normalized.includes('utilis')) {
+    return 'Ce nom d’utilisateur est déjà utilisé. Veuillez en choisir un autre.';
+  }
+  if (normalized.includes('role') && (normalized.includes('invalid') || normalized.includes('not allowed') || normalized.includes('restricted'))) {
+    return 'Rôle invalide. Les rôles autorisés sont ADMINISTRATEUR, RESPONSABLE, AGENT et CONTROLEUR.';
+  }
+  if (normalized.includes('password') || normalized.includes('weak') || normalized.includes('validation')) {
+    return 'Le mot de passe fourni est trop faible ou invalide. Utilisez au moins 12 caractères.';
+  }
+  if (normalized.includes('network') || normalized.includes('fetch') || normalized.includes('failed to fetch') || normalized.includes('edge')) {
+    return 'Erreur réseau ou échec de l’exécution de la fonction Supabase. Veuillez réessayer.';
+  }
+  if (normalized.includes('403') || normalized.includes('not allowed')) {
+    return 'Accès refusé : cette action est réservée à un administrateur PORTUS.';
+  }
+
+  return fallback;
+}
+
+async function ensureAdminFunctionAccess(supabase: ReturnType<typeof getSupabase>) {
+  if (!supabase) {
+    throw new Error('Supabase n’est pas configuré.');
+  }
+
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || !session?.access_token) {
+    throw new Error('Session administrateur expirée. Veuillez vous reconnecter.');
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role, is_active')
+    .eq('id', session.user.id)
+    .maybeSingle();
+
+  if (profileError || !profile || profile.role !== 'ADMINISTRATEUR' || !profile.is_active) {
+    throw new Error('Accès refusé : cette action est réservée à l’administrateur PORTUS.');
+  }
+
+  return { supabase, session };
+}
+
 export const SupabaseDataLayer = {
   /**
    * Vérifie si Supabase est connecté et prêt
@@ -81,36 +162,22 @@ export const SupabaseDataLayer = {
     const supabase = getSupabase();
     if (!supabase) return [];
 
-    // Tenter d'abord l'API backend admin si authentifié
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) {
-        const resp = await fetch('/api/admin/users', {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        });
-        if (resp.ok) {
-          const json = await resp.json();
-          if (Array.isArray(json.users) && json.users.length > 0) {
-            return json.users.map((row: any) => ({
-              id: row.id,
-              username: row.username,
-              fullName: row.full_name,
-              role: row.role,
-              sectorId: row.sector_id,
-              sectorName: row.sector?.name || row.sectors?.name,
-              phone: row.phone,
-              isActive: row.is_active,
-              failedAttempts: row.failed_attempts || 0,
-              lockedUntil: row.locked_until,
-              createdAt: row.created_at,
-              updatedAt: row.updated_at,
-            }));
-          }
-        }
+      await ensureAdminFunctionAccess(supabase);
+      const { data, error } = await supabase.functions.invoke('admin-user-management', {
+        body: { action: 'list' },
+      });
+
+      if (!error && Array.isArray(data?.users)) {
+        return data.users.map(normalizeAdminUserRow);
       }
-    } catch {}
+
+      if (error) {
+        throw error;
+      }
+    } catch (error) {
+      console.warn('Supabase fetchProfiles edge error:', error);
+    }
 
     const { data, error } = await supabase
       .from('profiles')
@@ -122,20 +189,7 @@ export const SupabaseDataLayer = {
       return [];
     }
 
-    return (data || []).map((row: any) => ({
-      id: row.id,
-      username: row.username,
-      fullName: row.full_name,
-      role: row.role,
-      sectorId: row.sector_id,
-      sectorName: row.sectors?.name,
-      phone: row.phone,
-      isActive: row.is_active,
-      failedAttempts: row.failed_attempts || 0,
-      lockedUntil: row.locked_until,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    }));
+    return (data || []).map(normalizeAdminUserRow);
   },
 
   /**
@@ -154,40 +208,37 @@ export const SupabaseDataLayer = {
       throw new Error('Supabase n’est pas configuré.');
     }
 
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-      throw new Error('Session administrateur expirée. Veuillez vous reconnecter.');
+    if (!ADMIN_USER_ROLES.includes(userData.role as typeof ADMIN_USER_ROLES[number])) {
+      throw new Error('Rôle invalide. Les rôles autorisés sont ADMINISTRATEUR, RESPONSABLE, AGENT et CONTROLEUR.');
     }
 
-    const res = await fetch('/api/admin/users', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify(userData),
-    });
+    try {
+      await ensureAdminFunctionAccess(supabase);
+      const { data, error } = await supabase.functions.invoke('admin-user-management', {
+        body: {
+          action: 'create',
+          username: userData.username,
+          fullName: userData.fullName,
+          role: userData.role,
+          sectorId: userData.sectorId,
+          phone: userData.phone,
+          passwordRaw: userData.passwordRaw,
+        },
+      });
 
-    const json = await res.json();
-    if (!res.ok) {
-      throw new Error(json.error || 'Erreur lors de la création de l’utilisateur dans Supabase.');
+      if (error) {
+        throw error;
+      }
+
+      const row = data?.user;
+      if (!row) {
+        throw new Error('Erreur lors de la création du compte utilisateur.');
+      }
+
+      return normalizeAdminUserRow(row);
+    } catch (error) {
+      throw new Error(describeFunctionError(error, 'Erreur lors de la création de l’utilisateur dans Supabase.'));
     }
-
-    const row = json.user;
-    return {
-      id: row.id,
-      username: row.username,
-      fullName: row.full_name,
-      role: row.role,
-      sectorId: row.sector_id,
-      sectorName: row.sector?.name,
-      phone: row.phone,
-      isActive: row.is_active,
-      failedAttempts: row.failed_attempts || 0,
-      lockedUntil: row.locked_until,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
   },
 
   /**
@@ -205,40 +256,27 @@ export const SupabaseDataLayer = {
       throw new Error('Supabase n’est pas configuré.');
     }
 
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-      throw new Error('Session administrateur expirée.');
+    const payload: Record<string, any> = { action: 'update', id: userId };
+    if (updates.fullName !== undefined) payload.fullName = updates.fullName;
+    if (updates.phone !== undefined) payload.phone = updates.phone;
+    if (updates.sectorId !== undefined) payload.sectorId = updates.sectorId;
+    if (updates.role !== undefined) payload.role = updates.role;
+    if (updates.isActive !== undefined) payload.isActive = updates.isActive;
+
+    try {
+      await ensureAdminFunctionAccess(supabase);
+      const { data, error } = await supabase.functions.invoke('admin-user-management', { body: payload });
+      if (error) {
+        throw error;
+      }
+      const row = data?.user;
+      if (!row) {
+        throw new Error('Erreur lors de la mise à jour de l’utilisateur.');
+      }
+      return normalizeAdminUserRow(row);
+    } catch (error) {
+      throw new Error(describeFunctionError(error, 'Erreur lors de la mise à jour de l’utilisateur.'));
     }
-
-    const res = await fetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify(updates),
-    });
-
-    const json = await res.json();
-    if (!res.ok) {
-      throw new Error(json.error || 'Erreur lors de la mise à jour de l’utilisateur.');
-    }
-
-    const row = json.user;
-    return {
-      id: row.id,
-      username: row.username,
-      fullName: row.full_name,
-      role: row.role,
-      sectorId: row.sector_id,
-      sectorName: row.sector?.name,
-      phone: row.phone,
-      isActive: row.is_active,
-      failedAttempts: row.failed_attempts || 0,
-      lockedUntil: row.locked_until,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
   },
 
   /**
@@ -250,26 +288,24 @@ export const SupabaseDataLayer = {
       throw new Error('Supabase n’est pas configuré.');
     }
 
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-      throw new Error('Session administrateur expirée.');
+    try {
+      await ensureAdminFunctionAccess(supabase);
+      const { data, error } = await supabase.functions.invoke('admin-user-management', {
+        body: {
+          action: 'reset_password',
+          id: userId,
+          newPasswordRaw,
+        },
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      return Boolean(data?.success ?? true);
+    } catch (error) {
+      throw new Error(describeFunctionError(error, 'Erreur lors de la réinitialisation du mot de passe.'));
     }
-
-    const res = await fetch(`/api/admin/users/${encodeURIComponent(userId)}/reset-password`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ newPasswordRaw }),
-    });
-
-    const json = await res.json();
-    if (!res.ok) {
-      throw new Error(json.error || 'Erreur lors de la réinitialisation du mot de passe.');
-    }
-
-    return true;
   },
 
   async upsertProfile(user: User): Promise<boolean> {

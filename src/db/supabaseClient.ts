@@ -74,8 +74,13 @@ export function getSupabaseConfig(): { url: string; anonKey: string; isConfigure
   // 1. Vite import.meta.env
   try {
     if (typeof import.meta !== 'undefined' && import.meta.env) {
-      envUrlRaw = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-      envKeyRaw = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY) as string | undefined;
+      envUrlRaw = (import.meta.env.VITE_SUPABASE_URL || import.meta.env.NEXT_PUBLIC_SUPABASE_URL) as string | undefined;
+      envKeyRaw = (
+        import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+        import.meta.env.VITE_SUPABASE_ANON_KEY ||
+        import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+        import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      ) as string | undefined;
     }
   } catch {
     // Environnement non-Vite (ex: scripts Node/tsx)
@@ -84,10 +89,15 @@ export function getSupabaseConfig(): { url: string; anonKey: string; isConfigure
   // 2. Node process.env de repli
   try {
     if (!envUrlRaw && typeof process !== 'undefined' && process.env) {
-      envUrlRaw = process.env.VITE_SUPABASE_URL;
+      envUrlRaw = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
     }
     if (!envKeyRaw && typeof process !== 'undefined' && process.env) {
-      envKeyRaw = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+      envKeyRaw = (
+        process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+        process.env.VITE_SUPABASE_ANON_KEY ||
+        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      );
     }
   } catch {
     // ignore

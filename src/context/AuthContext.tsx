@@ -335,6 +335,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         if (rpcErr) {
           const rpcMsg = rpcErr.message || '';
+            if (rpcErr.code === 'PGRST202') {
+              setLoginError('La configuration d’authentification Supabase est incomplète. Veuillez appliquer la migration PORTUS dans le projet de production.');
+              return false;
+            }
           if (rpcMsg.includes('COMPTE_VERROUILLE')) {
             setLockoutRemainingSeconds(900);
             setLoginError('Compte temporairement bloqué pendant 15 minutes suite à 5 tentatives infructueuses.');
@@ -503,7 +507,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return true;
     } catch (err: any) {
       console.error('Erreur technique lors de la connexion:', err);
-      setLoginError(`Erreur technique: ${err.message || 'Inconnue'}`);
+        const errorMessage = String(err?.message || '');
+        const isNetworkError =
+          err?.name === 'TypeError' ||
+          errorMessage.toLowerCase().includes('failed to fetch') ||
+          errorMessage.toLowerCase().includes('network') ||
+          errorMessage.toLowerCase().includes('connection');
+
+        setLoginError(
+          isNetworkError
+            ? "Impossible de joindre le serveur d'authentification U.J.S.R.V. Vérifiez l'URL Supabase, la clé publique et la connexion réseau."
+            : `Erreur technique: ${errorMessage || 'Inconnue'}`
+        );
       return false;
     }
   };

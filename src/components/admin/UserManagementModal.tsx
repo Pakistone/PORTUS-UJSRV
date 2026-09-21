@@ -12,6 +12,7 @@ import {
   Clock,
   UserCheck,
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { DEFAULT_SECTORS } from '../../config/constants';
 import type { Role, User } from '../../types';
@@ -22,6 +23,7 @@ interface Props {
 }
 
 export const UserManagementModal: React.FC<Props> = ({ isOpen, onClose }) => {
+  const { currentUser } = useAuth();
   const {
     users,
     tickets,
@@ -31,6 +33,10 @@ export const UserManagementModal: React.FC<Props> = ({ isOpen, onClose }) => {
     toggleUserActive,
     resetUserPassword,
   } = useData();
+
+  if (!currentUser || currentUser.role !== 'ADMINISTRATEUR') {
+    return null;
+  }
 
   const [activeTab, setActiveTab] = useState<'LIST' | 'CREATE'>('LIST');
 

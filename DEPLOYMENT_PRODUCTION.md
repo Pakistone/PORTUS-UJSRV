@@ -21,13 +21,31 @@ Backend:
 ## Sécurité QR
 Les QR officiels sont signés côté PostgreSQL avec un secret stocké dans Supabase Vault (`portus_qr_hmac_v1`). Le navigateur ne doit jamais contenir la clé de signature.
 
-## Déploiement
+## Déploiement Cloud Run
 1. Installer les dépendances avec `npm install`.
 2. Vérifier `npm run check`.
 3. Construire avec `npm run build`.
 4. Construire l'image `docker build -t portus-ujsrv .`.
 5. Déployer l'image sur Cloud Run avec `SUPABASE_URL` et `SUPABASE_SECRET_KEY` fournis par Secret Manager.
 6. Vérifier `/api/health` puis `/api/readyz`.
+
+## Déploiement Vercel
+
+Vercel héberge le frontend Vite statique. Le serveur Express `server.ts` et ses routes `/api/*` restent réservés à Cloud Run ou à un autre runtime Node.
+
+1. Importer le dépôt dans Vercel.
+2. Utiliser la configuration présente dans `vercel.json`.
+3. Définir ces variables pour Production, Preview et Development :
+
+```env
+VITE_SUPABASE_URL=https://<project-ref>.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=<publishable-key>
+```
+
+4. Déployer avec `npm run check` puis `npm run build:vercel`.
+5. Dans Supabase Auth, définir l’URL Vercel comme **Site URL** et ajouter les URLs Preview nécessaires dans **Redirect URLs**.
+
+Ne jamais ajouter `SUPABASE_SECRET_KEY` aux variables Vercel du frontend. La gestion des utilisateurs utilise l’Edge Function Supabase `admin-user-management`, qui doit être déployée dans le même projet Supabase.
 
 ## Base de données
 La migration de durcissement est enregistrée dans `supabase/migrations/20260921120000_portus_production_hardening.sql`.
