@@ -1,0 +1,6 @@
+{
+  "name": "PORTUS — U.J.S.R.V.",
+  "description": "Système de gestion de tickets, ventes terrain, contrôles et remises financières — Union des Jeunes de la Sécurité Routière de Vridi",
+  "requestFramePermissions": ["camera", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

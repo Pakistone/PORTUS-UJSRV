@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#1e293b" />
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#d97706" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background rounded squircle -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+
+  <!-- Outer security border -->
+  <rect x="24" y="24" width="464" height="464" rx="92" fill="none" stroke="#334155" stroke-width="4" stroke-dasharray="16 8" />
+
+  <!-- Road safety Shield icon -->
+  <path d="M256 70 L390 120 V250 C390 340 330 405 256 442 C182 405 122 340 122 250 V120 Z" fill="#1e293b" stroke="url(#accentGrad)" stroke-width="12" stroke-linejoin="round" />
+
+  <!-- Road markings inside shield -->
+  <path d="M256 140 L256 360" stroke="#f8fafc" stroke-width="16" stroke-dasharray="28 20" stroke-linecap="round" />
+
+  <!-- Ticket badge overlay -->
+  <rect x="180" y="200" width="152" height="100" rx="14" fill="#0f172a" stroke="url(#goldGrad)" stroke-width="8" />
+  <circle cx="180" cy="250" r="14" fill="#1e293b" />
+  <circle cx="332" cy="250" r="14" fill="#1e293b" />
+  <line x1="210" y1="230" x2="300" y2="230" stroke="#10b981" stroke-width="6" stroke-linecap="round" />
+  <line x1="210" y1="250" x2="270" y2="250" stroke="#94a3b8" stroke-width="5" stroke-linecap="round" />
+  <line x1="210" y1="270" x2="290" y2="270" stroke="#f59e0b" stroke-width="5" stroke-linecap="round" />
+
+  <!-- Brand text badge -->
+  <text x="256" y="405" font-family="system-ui, -apple-system, sans-serif" font-size="28" font-weight="900" fill="#f8fafc" text-anchor="middle" letter-spacing="4">PORTUS</text>
+  <text x="256" y="430" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="700" fill="#10b981" text-anchor="middle" letter-spacing="2">U.J.S.R.V.</text>
+</svg>
